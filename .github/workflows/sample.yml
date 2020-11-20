@@ -1,0 +1,31 @@
+name: Sample SSH server workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      sshPublicKey:
+        description: 'SSH public key'
+        required: true
+      exitCode:
+        description: 'When set to non-zero, a step will fail causing the SSH server to be started'
+        required: true
+        default: "0"
+
+jobs:
+  sample:
+    name: Sample
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Exit code
+      run: |
+        exit "${{ github.event.inputs.exitCode }}"
+
+    - name: Start SSH server on failure
+      if: ${{ failure() }}
+      timeout-minutes: 10
+      uses: ./
+      with:
+        ngrok-authtoken: "${{ secrets.NGROK_AUTHTOKEN }}"
+        ssh-public-key: "${{ github.event.inputs.sshPublicKey }}"
