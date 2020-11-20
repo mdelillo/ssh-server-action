@@ -1,0 +1,96 @@
+name: 'SSH Server'
+description: 'Expose an SSH server via ngrok that you can use to connect to your github runner'
+author: 'Mark DeLillo'
+inputs:
+  ngrok-authtoken:
+    description: 'ngrok authtoken'
+    required: true
+  ssh-public-key:
+    description: 'SSH public key to be allowed'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+  - name: Install dependencies
+    shell: bash
+    run: |
+      if [[ "${RUNNER_OS}" != 'Linux' ]]; then
+        echo "${RUNNER_OS} is not supported"
+        exit 1
+      fi
+
+      if ! [[ -f /usr/sbin/sshd ]]; then
+        sudo apt-get -qy install openssh-server jq
+      fi
+
+      if ! command -v ngrok > /dev/null; then
+        sudo apt-get -qy install curl unzip
+        curl -o /tmp/ngrok.zip -sL "https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip"
+        sudo unzip /tmp/ngrok.zip -d /usr/local/bin
+        rm /tmp/ngrok.zip
+      fi
+
+  - name: Get free port
+    id: get-free-port
+    shell: bash
+    run: |
+      port=10000
+
+      while [[ ${port} -le 65535 ]]; do
+        if ! sudo netstat -taln | grep -q $port; then
+          break
+        fi
+        port=$((port + 1))
+      done
+
+      if [[ ${port} -gt 65535 ]]; then
+        echo "Could not find free port"
+        exit 1
+      fi
+
+      echo "::set-output name=port::${port}"
+
+  - name: Start sshd
+    shell: bash
+    run: |
+      sudo mkdir -p /var/log/sshd
+
+      chmod 0770 "${HOME}"
+      mkdir -p "${HOME}/.ssh"
+      chmod 0700 "${HOME}/.ssh"
+      echo "${{ inputs.ssh-public-key }}" > "${HOME}/.ssh/authorized_keys"
+      chmod 0600 "${HOME}/.ssh/authorized_keys"
+
+      ssh-keygen -A
+
+      sudo sed -i 's/^#PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+      sudo sed -i 's/^PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+      sudo sed -i 's/^#PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+      sudo sed -i 's/^PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+
+      sudo sed -i 's/^#Port .*/Port ${{ steps.get-free-port.outputs.port }}/' /etc/ssh/sshd_config
+      sudo sed -i 's/^Port .*/Port ${{ steps.get-free-port.outputs.port }}/' /etc/ssh/sshd_config
+
+      sudo /usr/sbin/sshd -D -E /var/log/sshd/sshd.log &
+
+  - name: Start ngrok
+    shell: bash
+    run: |
+      ngrok authtoken "${{ inputs.ngrok-authtoken }}"
+
+      {
+        while true; do
+          if curl -sf 'http://localhost:4040/api/tunnels' >/dev/null; then
+            ngrok_url="$(curl -s 'http://localhost:4040/api/tunnels' | jq -r '.tunnels[0].public_url' | sed 's|tcp://||')"
+            host="$(echo "${ngrok_url}" | cut -d':' -f1)"
+            port="$(echo "${ngrok_url}" | cut -d':' -f2)"
+            echo -e "\nTo SSH to this runner: \`ssh -i /path/to/private/key -p ${port} runner@${host}\`\n"
+            break
+          fi
+
+          sleep 1
+        done
+      } &
+
+      ngrok tcp --log stdout --log-format term ${{ steps.get-free-port.outputs.port }}
