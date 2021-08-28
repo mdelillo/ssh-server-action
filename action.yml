@@ -22,11 +22,9 @@ runs:
       if [[ "${RUNNER_OS}" == 'Linux' ]]; then
         ngrokurl="https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip"
         installcmd="sudo apt-get -qy"
-        homechmod="0770"
       else
         ngrokurl="https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-darwin-amd64.zip"
         installcmd="brew"
-        homechmod="g-w"
       fi
 
       if ! [[ -f /usr/sbin/sshd ]]; then
