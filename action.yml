@@ -19,6 +19,8 @@ runs:
         exit 1
       fi
       
+      ngrokurl = ""
+      installcmd = ""
       if [[ "${RUNNER_OS}" -eq 'Linux' ]]; then
         ngrokurl = "https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip"
         installcmd = "sudo apt-get -qy"
