@@ -35,7 +35,7 @@ runs:
 
       if ! command -v ngrok > /dev/null; then
         $(installcmd) install curl unzip
-        curl -o /tmp/ngrok.zip -sL "$(ngrokurl)"
+        curl -o /tmp/ngrok.zip -sL $ngrokurl
         sudo unzip /tmp/ngrok.zip -d /usr/local/bin
         rm /tmp/ngrok.zip
       fi
