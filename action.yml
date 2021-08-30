@@ -14,18 +14,26 @@ runs:
   - name: Install dependencies
     shell: bash
     run: |
-      if [[ "${RUNNER_OS}" != 'Linux' ]]; then
+      if [[ "${RUNNER_OS}" != 'Linux' ]] && [[ "${RUNNER_OS}" != 'macOS' ]]; then
         echo "${RUNNER_OS} is not supported"
         exit 1
       fi
+      
+      if [[ "${RUNNER_OS}" == 'Linux' ]]; then
+        ngrokurl="https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip"
+        installcmd="sudo apt-get -qy"
+      else
+        ngrokurl="https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-darwin-amd64.zip"
+        installcmd="brew"
+      fi
 
       if ! [[ -f /usr/sbin/sshd ]]; then
-        sudo apt-get -qy install openssh-server jq
+        $installcmd install openssh-server jq
       fi
 
       if ! command -v ngrok > /dev/null; then
-        sudo apt-get -qy install curl unzip
-        curl -o /tmp/ngrok.zip -sL "https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip"
+        $installcmd install curl unzip
+        curl -o /tmp/ngrok.zip -sL $ngrokurl
         sudo unzip /tmp/ngrok.zip -d /usr/local/bin
         rm /tmp/ngrok.zip
       fi
@@ -55,7 +63,12 @@ runs:
     run: |
       sudo mkdir -p /var/log/sshd
 
-      chmod 0770 "${HOME}"
+      if [[ "${RUNNER_OS}" == 'Linux' ]]; then
+        chmod 0770 "${HOME}"
+      else
+        chmod g-w "${HOME}"
+      fi
+      
       mkdir -p "${HOME}/.ssh"
       chmod 0700 "${HOME}/.ssh"
       echo "${{ inputs.ssh-public-key }}" > "${HOME}/.ssh/authorized_keys"
@@ -63,14 +76,14 @@ runs:
 
       ssh-keygen -A
 
-      sudo sed -i 's/^#PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-      sudo sed -i 's/^PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+      sudo sed -i.bak 's/^#PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+      sudo sed -i.bak 's/^PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
 
-      sudo sed -i 's/^#PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-      sudo sed -i 's/^PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+      sudo sed -i.bak 's/^#PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+      sudo sed -i.bak 's/^PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
-      sudo sed -i 's/^#Port .*/Port ${{ steps.get-free-port.outputs.port }}/' /etc/ssh/sshd_config
-      sudo sed -i 's/^Port .*/Port ${{ steps.get-free-port.outputs.port }}/' /etc/ssh/sshd_config
+      sudo sed -i.bak 's/^#Port .*/Port ${{ steps.get-free-port.outputs.port }}/' /etc/ssh/sshd_config
+      sudo sed -i.bak 's/^Port .*/Port ${{ steps.get-free-port.outputs.port }}/' /etc/ssh/sshd_config
 
       sudo /usr/sbin/sshd -D -E /var/log/sshd/sshd.log &
 
